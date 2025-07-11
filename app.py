@@ -113,5 +113,59 @@ def setup_database():
             cur.close()
             conn.close()
 
+@app.route('/api/v1/proposals', methods=['GET'])
+def get_proposals():
+    limit = request.args.get('limit', 100, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Toplam kayıt sayısını al
+        cur.execute("SELECT COUNT(*) FROM proposals")
+        total_count = cur.fetchone()[0]
+        
+        # Sayfalama ile verileri al
+        cur.execute("""
+            SELECT esas_no, donem_yasama, tarih, milletvekili_veya_kurum, 
+                   ozet, durum, linkler, created_at
+            FROM proposals 
+            ORDER BY created_at DESC 
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
+        
+        rows = cur.fetchall()
+        
+        # JSON formatına çevir
+        proposals = []
+        for row in rows:
+            proposals.append({
+                'proposal_id': row[0],
+                'donem_yasama': row[1],
+                'tarih': row[2],
+                'milletvekili_veya_kurum': row[3],
+                'summary': row[4],
+                'durum': row[5],
+                'linkler': row[6],
+                'created_at': row[7].isoformat() if row[7] else None
+            })
+        
+        return jsonify({
+            'results': proposals,
+            'count': total_count,
+            'limit': limit,
+            'offset': offset
+        }), 200
+        
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+    finally:
+        if conn:
+            cur.close()
+            conn.close()
+        
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
